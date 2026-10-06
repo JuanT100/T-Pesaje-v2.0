@@ -1,0 +1,265 @@
+package com.tnova.t_pesaje.screens.weighing
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.tnova.t_pesaje.features.weighing.WeightData
+import com.tnova.t_pesaje.features.weighing.PesajeApi
+import com.tnova.t_pesaje.features.simulation.WeightSimulator
+import kotlinx.coroutines.launch
+
+@Composable
+fun PesajeScreen(
+    idUsuario: Int?,
+    onHistorial: () -> Unit,
+    onCerrarSesion: () -> Unit
+) {
+    var datosPeso by remember {
+        mutableStateOf<WeightData?>(null)
+    }
+
+    var productoExpandido by remember {
+        mutableStateOf(false)
+    }
+
+    var idProducto by remember {
+        mutableStateOf<Int?>(null)
+    }
+
+    var otros by remember {
+        mutableStateOf("")
+    }
+
+    var mensaje by remember {
+        mutableStateOf("")
+    }
+
+    var registrando by remember {
+        mutableStateOf(false)
+    }
+
+    val productos = listOf(
+        1 to "Producto 1",
+        2 to "Producto 2"
+    )
+
+    val scope = rememberCoroutineScope()
+
+    DisposableEffect(Unit) {
+
+        val fuente = WeightSimulator()
+
+        fuente.iniciar { lectura ->
+            datosPeso = lectura
+        }
+
+        onDispose {
+            fuente.detener()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Top
+    ) {
+
+        Text(
+            text = "Registro de Pesaje"
+        )
+
+        Text(
+            text = "Balanza: ${datosPeso?.balanza ?: "Esperando..."}",
+            modifier = Modifier.padding(top = 24.dp)
+        )
+
+        Text(
+            text = "Peso: ${
+                datosPeso?.peso?.let {
+                    "%.3f".format(it)
+                } ?: "---"
+            }",
+            modifier = Modifier.padding(top = 8.dp)
+        )
+
+        Text(
+            text = "Estado: ${
+                if (datosPeso?.estable == true) {
+                    "Estable"
+                } else {
+                    "Inestable"
+                }
+            }",
+            modifier = Modifier.padding(top = 8.dp)
+        )
+
+        Text(
+            text = "Fecha: ${datosPeso?.fecha ?: "---"}",
+            modifier = Modifier.padding(top = 8.dp)
+        )
+
+        Text(
+            text = "Hora: ${datosPeso?.hora ?: "---"}",
+            modifier = Modifier.padding(top = 8.dp)
+        )
+
+        OutlinedTextField(
+            value =
+                productos.firstOrNull {
+                    it.first == idProducto
+                }?.second ?: "",
+            onValueChange = {},
+            readOnly = true,
+            label = {
+                Text("Producto")
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp)
+        )
+
+        Button(
+            onClick = {
+                productoExpandido = !productoExpandido
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "Seleccionar producto"
+            )
+        }
+
+        DropdownMenu(
+            expanded = productoExpandido,
+            onDismissRequest = {
+                productoExpandido = false
+            }
+        ) {
+
+            productos.forEach { producto ->
+
+                DropdownMenuItem(
+                    text = {
+                        Text(producto.second)
+                    },
+                    onClick = {
+                        idProducto = producto.first
+                        productoExpandido = false
+                    }
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = otros,
+            onValueChange = {
+                if (it.length <= 250) {
+                    otros = it
+                }
+            },
+            label = {
+                Text("Otros")
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp)
+        )
+
+        Button(
+            onClick = {
+
+                val lectura = datosPeso
+
+                if (
+                    lectura == null ||
+                    idUsuario == null ||
+                    registrando
+                ) {
+                    return@Button
+                }
+
+                registrando = true
+                mensaje = ""
+
+                scope.launch {
+
+                    val resultado =
+                        PesajeApi.registrarPesaje(
+                            idBalanza = 1,
+                            peso = lectura.peso,
+                            fecha = lectura.fecha,
+                            hora = lectura.hora,
+                            idProducto = idProducto,
+                            idUsuario = idUsuario,
+                            otros = otros.ifBlank {
+                                null
+                            }
+                        )
+
+                    registrando = false
+                    mensaje = resultado.mensaje
+                }
+            },
+            enabled =
+                datosPeso != null &&
+                        idUsuario != null &&
+                        !registrando,
+            modifier = Modifier.padding(top = 24.dp)
+        ) {
+
+            Text(
+                text =
+                    if (registrando) {
+                        "Registrando..."
+                    } else {
+                        "Guardar"
+                    }
+            )
+        }
+
+        if (mensaje.isNotBlank()) {
+
+            Text(
+                text = mensaje,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+        }
+
+        Button(
+            onClick = onHistorial,
+            modifier = Modifier.padding(top = 16.dp)
+        ) {
+            Text(
+                text = "Historial"
+            )
+        }
+
+        Button(
+            onClick = onCerrarSesion,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            Text(
+                text = "Cerrar sesión"
+            )
+        }
+    }
+}

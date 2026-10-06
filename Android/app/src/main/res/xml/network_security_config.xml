@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<network-security-config>
+
+    <!--
+        T-Pesaje solo permite tráfico cifrado.
+        El certificado incluido en res/raw es el certificado
+        público utilizado por la API local de T-Pesaje.
+    -->
+    <base-config cleartextTrafficPermitted="false">
+
+        <trust-anchors>
+
+            <!--
+                Android confía específicamente en el certificado
+                público de la API.
+            -->
+            <certificates src="@raw/tpesaje_api_cert" />
+
+        </trust-anchors>
+
+    </base-config>
+
+</network-security-config>

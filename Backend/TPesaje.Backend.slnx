@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="TPesaje.Api/TPesaje.Api.csproj" />
+  <Project Path="TPesaje.Application/TPesaje.Application.csproj" />
+  <Project Path="TPesaje.Domain/TPesaje.Domain.csproj" />
+  <Project Path="TPesaje.Infrastructure/TPesaje.Infrastructure.csproj" />
+</Solution>

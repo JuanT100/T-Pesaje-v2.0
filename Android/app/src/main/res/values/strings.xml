@@ -1,0 +1,4 @@
+<resources>
+    <!-- Nombre visible de la aplicación Android. -->
+    <string name="app_name">T-Pesaje</string>
+</resources>

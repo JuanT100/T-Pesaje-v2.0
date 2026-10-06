@@ -1,0 +1,48 @@
+# Android
+Android/.gradle/
+Android/.idea/
+Android/**/build/
+Android/**/captures/
+Android/local.properties
+Android/**/.cxx/
+Android/**/.externalNativeBuild/
+
+# Android Studio
+*.iml
+
+# Backend - .NET
+Backend/**/bin/
+Backend/**/obj/
+Backend/**/TestResults/
+
+# Visual Studio
+.vs/
+
+# Configuración local
+*.user
+*.suo
+
+# Archivos de configuración sensibles
+**/appsettings.Development.json
+**/appsettings.Local.json
+
+# Base de datos / archivos locales
+*.mdf
+*.ldf
+*.ndf
+
+# Logs
+*.log
+
+# Archivos temporales
+*.tmp
+*.temp
+
+# Sistema operativo
+Thumbs.db
+Desktop.ini
+
+# Variables de entorno
+.env
+.env.*
+!.env.example

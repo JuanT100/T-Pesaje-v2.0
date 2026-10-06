@@ -1,0 +1,499 @@
+package com.tnova.t_pesaje.screens.reports
+
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.tnova.t_pesaje.features.reports.HistoryData
+import com.tnova.t_pesaje.features.reports.HistorialApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
+/**
+ * Pantalla de consulta y visualización del historial de pesajes.
+ *
+ * Permite filtrar por rango de fechas y colaborador,
+ * consultar los registros y cargar resultados adicionales.
+ *
+ * Los resultados se presentan en formato de tabla/grid,
+ * permitiendo desplazamiento horizontal para visualizar
+ * todas las columnas.
+ */
+@Composable
+fun HistorialScreen(
+    onVolver: () -> Unit
+) {
+
+    val formatter = remember {
+        DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    }
+
+    val scope = rememberCoroutineScope()
+
+    var fechaDesde by remember {
+        mutableStateOf(LocalDate.now())
+    }
+
+    var fechaHasta by remember {
+        mutableStateOf(LocalDate.now())
+    }
+
+    var colaborador by remember {
+        mutableStateOf("")
+    }
+
+    var registros by remember {
+        mutableStateOf<List<HistoryData>>(emptyList())
+    }
+
+    var offset by remember {
+        mutableIntStateOf(0)
+    }
+
+    var hayMas by remember {
+        mutableStateOf(false)
+    }
+
+    var total by remember {
+        mutableLongStateOf(0L)
+    }
+
+    var cargando by remember {
+        mutableStateOf(false)
+    }
+
+    var mensaje by remember {
+        mutableStateOf("")
+    }
+
+    var mostrarFechaDesde by remember {
+        mutableStateOf(false)
+    }
+
+    var mostrarFechaHasta by remember {
+        mutableStateOf(false)
+    }
+
+    /**
+     * Consulta el historial aplicando los filtros seleccionados.
+     *
+     * Si reiniciar es true, comienza nuevamente desde el primer registro.
+     * Si es false, solicita la siguiente página de resultados.
+     */
+    fun consultarHistorial(reiniciar: Boolean) {
+
+        if (fechaHasta.isBefore(fechaDesde)) {
+            mensaje = "La fecha final no puede ser menor que la fecha inicial."
+            return
+        }
+
+        val nuevoOffset = if (reiniciar) 0 else offset
+
+        cargando = true
+        mensaje = ""
+
+        scope.launch(Dispatchers.Main) {
+
+            val resultado = withContext(Dispatchers.IO) {
+                HistorialApi.consultarHistorial(
+                    desde = fechaDesde.format(formatter),
+                    hasta = fechaHasta.format(formatter),
+                    colaborador = colaborador.ifBlank { null },
+                    offset = nuevoOffset,
+                    limit = 100
+                )
+            }
+
+            cargando = false
+
+            if (resultado.exitoso) {
+
+                registros = if (reiniciar) {
+                    resultado.registros
+                } else {
+                    registros + resultado.registros
+                }
+
+                offset = nuevoOffset + resultado.registros.size
+                total = resultado.total
+                hayMas = resultado.hayMas
+
+                mensaje = if (registros.isEmpty()) {
+                    "No se encontraron pesajes."
+                } else {
+                    ""
+                }
+
+            } else {
+                mensaje = resultado.mensaje
+            }
+        }
+    }
+
+    // Consulta automáticamente el historial al abrir la pantalla.
+    LaunchedEffect(Unit) {
+        consultarHistorial(true)
+    }
+
+    /*
+     * Estado de desplazamiento horizontal de la tabla.
+     *
+     * Se mantiene un único estado para que el encabezado
+     * y las filas se desplacen horizontalmente de forma conjunta.
+     */
+    val scrollHorizontal = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+
+        Text(
+            text = "Historial de Pesajes"
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    mostrarFechaDesde = true
+                }
+            ) {
+                Text(
+                    text = "Desde\n${fechaDesde.format(formatter)}"
+                )
+            }
+
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    mostrarFechaHasta = true
+                }
+            ) {
+                Text(
+                    text = "Hasta\n${fechaHasta.format(formatter)}"
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = colaborador,
+            onValueChange = {
+                colaborador = it
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = {
+                Text("Colaborador")
+            },
+            singleLine = true
+        )
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !cargando,
+            onClick = {
+                consultarHistorial(true)
+            }
+        ) {
+            Text("Consultar")
+        }
+
+        if (mensaje.isNotBlank()) {
+            Text(mensaje)
+        }
+
+        /*
+         * Área de historial.
+         *
+         * La tabla tiene desplazamiento horizontal porque contiene
+         * varias columnas que pueden superar el ancho disponible
+         * del dispositivo.
+         */
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+
+            /*
+             * Encabezado de la tabla.
+             */
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(scrollHorizontal)
+            ) {
+
+                Text(
+                    text = "Pesaje",
+                    modifier = Modifier.width(80.dp)
+                )
+
+                Text(
+                    text = "Balanza",
+                    modifier = Modifier.width(120.dp)
+                )
+
+                Text(
+                    text = "Peso",
+                    modifier = Modifier.width(100.dp)
+                )
+
+                Text(
+                    text = "Fecha",
+                    modifier = Modifier.width(110.dp)
+                )
+
+                Text(
+                    text = "Hora",
+                    modifier = Modifier.width(90.dp)
+                )
+
+                Text(
+                    text = "Producto",
+                    modifier = Modifier.width(150.dp)
+                )
+
+                Text(
+                    text = "Colaborador",
+                    modifier = Modifier.width(150.dp)
+                )
+
+                Text(
+                    text = "Otros",
+                    modifier = Modifier.width(200.dp)
+                )
+            }
+
+            /*
+             * Filas de datos.
+             *
+             * LazyColumn permite desplazar verticalmente los registros
+             * sin necesidad de mantener todos los elementos compuestos
+             * simultáneamente en pantalla.
+             */
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+
+                items(
+                    items = registros,
+                    key = {
+                        it.idPesaje
+                    }
+                ) { pesaje ->
+
+                    Row(
+                        modifier = Modifier
+                            .horizontalScroll(scrollHorizontal)
+                            .padding(vertical = 8.dp)
+                    ) {
+
+                        Text(
+                            text = pesaje.idPesaje.toString(),
+                            modifier = Modifier.width(80.dp)
+                        )
+
+                        Text(
+                            text = pesaje.balanza,
+                            modifier = Modifier.width(120.dp)
+                        )
+
+                        Text(
+                            text = "%.3f".format(pesaje.peso),
+                            modifier = Modifier.width(100.dp)
+                        )
+
+                        Text(
+                            text = pesaje.fecha,
+                            modifier = Modifier.width(110.dp)
+                        )
+
+                        Text(
+                            text = pesaje.hora,
+                            modifier = Modifier.width(90.dp)
+                        )
+
+                        Text(
+                            text = pesaje.producto ?: "—",
+                            modifier = Modifier.width(150.dp)
+                        )
+
+                        Text(
+                            text = pesaje.colaborador,
+                            modifier = Modifier.width(150.dp)
+                        )
+
+                        Text(
+                            text = pesaje.otros ?: "—",
+                            modifier = Modifier.width(200.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (hayMas) {
+
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !cargando,
+                onClick = {
+                    consultarHistorial(false)
+                }
+            ) {
+                Text("Cargar más")
+            }
+        }
+
+        Text(
+            text = "Mostrando ${registros.size} de $total registros"
+        )
+
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onVolver
+        ) {
+            Text("Volver")
+        }
+    }
+
+    /*
+     * Selector de fecha Desde.
+     */
+    if (mostrarFechaDesde) {
+
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis =
+                fechaDesde.atStartOfDay(ZoneOffset.UTC)
+                    .toInstant()
+                    .toEpochMilli()
+        )
+
+        DatePickerDialog(
+            onDismissRequest = {
+                mostrarFechaDesde = false
+            },
+            confirmButton = {
+
+                TextButton(
+                    onClick = {
+
+                        state.selectedDateMillis?.let { millis ->
+
+                            fechaDesde = Instant
+                                .ofEpochMilli(millis)
+                                .atZone(ZoneOffset.UTC)
+                                .toLocalDate()
+                        }
+
+                        mostrarFechaDesde = false
+                    }
+                ) {
+                    Text("Aceptar")
+                }
+            },
+            dismissButton = {
+
+                TextButton(
+                    onClick = {
+                        mostrarFechaDesde = false
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        ) {
+            DatePicker(
+                state = state
+            )
+        }
+    }
+
+    /*
+     * Selector de fecha Hasta.
+     */
+    if (mostrarFechaHasta) {
+
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis =
+                fechaHasta.atStartOfDay(ZoneOffset.UTC)
+                    .toInstant()
+                    .toEpochMilli()
+        )
+
+        DatePickerDialog(
+            onDismissRequest = {
+                mostrarFechaHasta = false
+            },
+            confirmButton = {
+
+                TextButton(
+                    onClick = {
+
+                        state.selectedDateMillis?.let { millis ->
+
+                            fechaHasta = Instant
+                                .ofEpochMilli(millis)
+                                .atZone(ZoneOffset.UTC)
+                                .toLocalDate()
+                        }
+
+                        mostrarFechaHasta = false
+                    }
+                ) {
+                    Text("Aceptar")
+                }
+            },
+            dismissButton = {
+
+                TextButton(
+                    onClick = {
+                        mostrarFechaHasta = false
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        ) {
+            DatePicker(
+                state = state
+            )
+        }
+    }
+}
